@@ -23,12 +23,12 @@
 
 enum { TD_BSLS_RSFT };
 
-enum keycodes { DEFAULT_COLOR = SAFE_RANGE, RED, PURPLE };
+enum keycodes { CHANGE_COLOR = SAFE_RANGE };
 
 enum anne_pro_layers {
     BASE,
     FN1,
-    COLOR,
+    _COLOR,
 };
 
 tap_dance_action_t tap_dance_actions[] = {
@@ -78,11 +78,11 @@ tap_dance_action_t tap_dance_actions[] = {
     KC_GRV,  KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12,  KC_DEL,
     _______, KC_MPRV, KC_MPLY, KC_MNXT, _______, _______, _______, _______, _______, _______, KC_PSCR, KC_HOME, KC_END,  _______,
     _______, KC_P1,   KC_P2,   KC_P3,   KC_P4,   KC_P5,   KC_P6,  KC_P7,    KC_P8,   KC_P9, KC_PGUP, KC_PGDN, _______,
-    _______, KC_NUBS, KC_P0,   KC_AP_LED_ON,  KC_AP_LED_OFF, _______, _______,  OSL(COLOR), _______, KC_INS,  KC_DEL,  _______,
+    _______, KC_NUBS, KC_P0,   KC_AP_LED_ON,  KC_AP_LED_OFF, _______, _______,  OSL(_COLOR), _______, KC_INS,  KC_DEL,  _______,
     _______, _______, _______,                            _______,                   _______, _______, _______, _______
 ),
- [COLOR] = LAYOUT_60_ansi( /* FN1 */
-    _______, DEFAULT_COLOR, RED, PURPLE, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
+ [_COLOR] = LAYOUT_60_ansi( /* FN1 */
+    CHANGE_COLOR, CHANGE_COLOR, CHANGE_COLOR, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
     _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
     _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
     _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
@@ -91,73 +91,80 @@ tap_dance_action_t tap_dance_actions[] = {
 };
 // clang-format on
 
-struct hsv_t color_config = {222, 255, 255};
-
+enum custom_colors { DEFAULT_COLOR, RED, PURPLE };
 const struct hsv_t color_lookup[] = {
     [DEFAULT_COLOR] = {222, 255, 255},
     [RED] = {0, 255, 255},
     [PURPLE] = {183, 255, 255},
 };
 
+uint8_t current_color = DEFAULT_COLOR;
+bool darken_color = false;
+
+void set_led_hsv(const struct hsv_t hsv) {
+    rgb_matrix_sethsv(hsv.h, hsv.s, hsv.v);
+};
+
+hsv_t get_lookup(uint16_t color) {
+    struct hsv_t hsv = color_lookup[color];
+
+    if(darken_color) {
+        hsv.h = (255 + hsv.h - 16) % 255;
+    }
+    
+    return hsv;
+};
+
+void set_current_color(uint16_t new_color) {
+    current_color = new_color;
+    rgb_matrix_mode(1);
+    set_led_hsv(get_lookup(new_color));
+};
+
 void keyboard_post_init_user(void) {
     ap2_led_enable();
 
     rgb_matrix_mode(1);
-    rgb_matrix_sethsv(color_config.h, color_config.s, color_config.v);
-}
-
-bool led_update_user(led_t leds) {
-    if (leds.caps_lock) {
-        // set HSV to a darker hue of the current color 255;
-        rgb_matrix_sethsv((color_config.h - 16) % 255, color_config.s, color_config.v);
-    } else {
-        rgb_matrix_sethsv(color_config.h, color_config.s, color_config.v);
-    }
-
-    return true;
-}
+    set_led_hsv(get_lookup(current_color));
+};
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    uint8_t row = record->event.key.row;
+    uint8_t col = record->event.key.col;
+    uint8_t index = g_led_config.matrix_co[row][col];
     switch (keycode) {
-        case DEFAULT_COLOR:
+        case CHANGE_COLOR:
             if (record->event.pressed) {
-                rgb_matrix_mode(1);
-
-                color_config = (struct hsv_t){222, 255, 255};
-                rgb_matrix_sethsv(color_config.h, color_config.s, color_config.v);
-            }
-            return false;
-
-        case RED:
-            if (record->event.pressed) {
-                rgb_matrix_mode(1);
-                color_config = (struct hsv_t){0, 255, 255};
-                rgb_matrix_sethsv(color_config.h, color_config.s, color_config.v);
-            }
-            return false;
-
-        case PURPLE:
-            if (record->event.pressed) {
-                rgb_matrix_mode(1);
-                color_config = (struct hsv_t){183, 255, 255};
-                rgb_matrix_sethsv(color_config.h, color_config.s, color_config.v);
+                set_current_color(index);
             }
             return false;
 
         default:
-            return true; // Process all other keycodes normally
+            return true;
     }
-}
+};
+
+bool led_update_user(led_t leds) {
+    if (leds.caps_lock) {
+        darken_color = true;
+    } else {
+        darken_color = false;
+    }
+    
+    set_led_hsv(get_lookup(current_color));
+    return true;
+};
 
 bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
     uint8_t layer = get_highest_layer(layer_state);
+    const RGB rgb = hsv_to_rgb(get_lookup(current_color));
+
     if (layer == 1) {
         for (uint8_t row = 0; row < MATRIX_ROWS; ++row) {
             for (uint8_t col = 0; col < MATRIX_COLS; ++col) {
                 uint8_t index = g_led_config.matrix_co[row][col];
 
                 if (index >= led_min && index < led_max && index != NO_LED && keymap_key_to_keycode(layer, (keypos_t){col, row}) > KC_TRNS) {
-                    const RGB rgb = hsv_to_rgb(color_config);
                     rgb_matrix_set_color(index, rgb.r, rgb.g, rgb.b);
                 } else if (index >= led_min && index < led_max && index != NO_LED && keymap_key_to_keycode(layer, (keypos_t){col, row}) == KC_TRNS) {
                     rgb_matrix_set_color(index, 0, 0, 0);
@@ -171,16 +178,17 @@ bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
 bool rgb_matrix_indicators_user(void) {
     uint8_t layer = biton32(layer_state);
     switch (layer) {
-        case 0:
-            break;
-        case 1:
-            break;
         case 2:
-            rgb_matrix_set_color_all(0, 0, 0);    // rest of keys blank/black
-            rgb_matrix_set_color(1, 255, 0, 200); // DEFAULT_COLOR, 1
-            rgb_matrix_set_color(2, 255, 0, 0);   // RED,           2
-            rgb_matrix_set_color(3, 77, 0, 255);  // PUPRLE,        3
+            // Set all keys to black
+            rgb_matrix_set_color_all(0, 0, 0);
+
+            for (uint8_t i = 0; i < sizeof(color_lookup) / sizeof(color_lookup[0]); i++) {
+                struct hsv_t hsv = get_lookup(i);
+                const RGB rgb = hsv_to_rgb(hsv);
+
+                rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+            }
             break;
     }
     return true;
-}
+};
