@@ -91,22 +91,19 @@ tap_dance_action_t tap_dance_actions[] = {
 };
 // clang-format on
 
-struct HSV color_config = {222, 255, 255};
+struct hsv_t color_config = {222, 255, 255};
+
+const struct hsv_t color_lookup[] = {
+    [DEFAULT_COLOR] = {222, 255, 255},
+    [RED] = {0, 255, 255},
+    [PURPLE] = {183, 255, 255},
+};
 
 void keyboard_post_init_user(void) {
     ap2_led_enable();
 
     rgb_matrix_mode(1);
     rgb_matrix_sethsv(color_config.h, color_config.s, color_config.v);
-}
-
-uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
-    switch (keycode) {
-        case TD(TD_BSLS_RSFT):
-            return 200;
-        default:
-            return TAPPING_TERM;
-    }
 }
 
 bool led_update_user(led_t leds) {
@@ -126,7 +123,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
                 rgb_matrix_mode(1);
 
-                color_config = (struct HSV){222, 255, 255};
+                color_config = (struct hsv_t){222, 255, 255};
                 rgb_matrix_sethsv(color_config.h, color_config.s, color_config.v);
             }
             return false;
@@ -134,7 +131,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case RED:
             if (record->event.pressed) {
                 rgb_matrix_mode(1);
-                color_config = (struct HSV){0, 255, 255};
+                color_config = (struct hsv_t){0, 255, 255};
                 rgb_matrix_sethsv(color_config.h, color_config.s, color_config.v);
             }
             return false;
@@ -142,7 +139,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case PURPLE:
             if (record->event.pressed) {
                 rgb_matrix_mode(1);
-                color_config = (struct HSV){183, 255, 255};
+                color_config = (struct hsv_t){183, 255, 255};
                 rgb_matrix_sethsv(color_config.h, color_config.s, color_config.v);
             }
             return false;
